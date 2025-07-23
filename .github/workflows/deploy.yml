@@ -1,0 +1,153 @@
+name: Deploy PHP App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CONTAINER_NAME: php-app-container
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/tdc-php-app
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.build.outputs.image-tag }}
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+    - name: Build and push Docker image
+      id: build
+      run: |
+        # Verificar se DOCKERHUB_USERNAME está configurado
+        if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+          echo "❌ Erro: DOCKERHUB_USERNAME não está configurado"
+          exit 1
+        fi
+        
+        # Definir nome da imagem
+        IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/tdc-php-app"
+        
+        # Gerar tag baseada no commit
+        TAG=$(echo $GITHUB_SHA | head -c7)
+        echo "image-tag=$TAG" >> $GITHUB_OUTPUT
+        
+        # Build e push com tag latest e commit
+        docker build -t $IMAGE_NAME:latest -t $IMAGE_NAME:$TAG .
+        docker push $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:$TAG
+        
+        echo "✅ Imagem enviada para Docker Hub: $IMAGE_NAME:latest e $IMAGE_NAME:$TAG"
+        
+        # Verificar se será feito deploy
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "🚀 Deploy será executado após build bem-sucedido"
+        else
+          echo "📦 Apenas build realizado (deploy apenas na branch main)"
+        fi
+        
+    - name: Test container locally
+      run: |
+        IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/tdc-php-app"
+        docker run -d --name test-container -p 8080:80 $IMAGE_NAME:latest
+        sleep 10
+        curl -f http://localhost:8080 || exit 1
+        docker stop test-container
+        docker rm test-container
+        
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Deploy Info
+      run: |
+        IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/tdc-php-app"
+        echo "🚀 Iniciando deploy para produção"
+        echo "📍 Branch: ${{ github.ref_name }}"
+        echo "📦 Imagem: $IMAGE_NAME:${{ needs.build-and-push.outputs.image-tag }}"
+        echo "🎯 Target: ${{ secrets.VPS_HOST }}"
+        
+    - name: Deploy to VPS
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_USER: ${{ secrets.VPS_USER }}
+        VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      run: |
+        # Definir nome da imagem
+        IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/tdc-php-app"
+        
+        # Verificar se as variáveis estão definidas
+        if [ -z "$IMAGE_NAME" ]; then
+          echo "❌ Erro: IMAGE_NAME está vazio"
+          exit 1
+        fi
+        
+        echo "📦 Usando imagem: $IMAGE_NAME"
+        
+        # Configurar SSH
+        mkdir -p ~/.ssh
+        echo "$VPS_SSH_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+        
+        # Conectar ao VPS e fazer deploy
+        ssh -i ~/.ssh/id_rsa $VPS_USER@$VPS_HOST "
+          # Verificar se Docker está instalado
+          echo '🔍 Verificando se Docker está instalado...'
+          if ! command -v docker &> /dev/null; then
+            echo '❌ ERRO: Docker não está instalado no VPS!'
+            exit 1
+          else
+            echo '✅ Docker está instalado'
+          fi
+          
+          # Parar e remover container anterior (se existir)
+          echo 'Parando container anterior...'
+          docker stop $CONTAINER_NAME 2>/dev/null || true
+          docker rm $CONTAINER_NAME 2>/dev/null || true
+          
+          # Remover imagem anterior
+          echo 'Removendo imagem anterior...'
+          docker rmi $IMAGE_NAME:latest 2>/dev/null || true
+          
+          # Fazer pull da nova imagem do Docker Hub
+          echo 'Baixando nova imagem do Docker Hub...'
+          docker pull $IMAGE_NAME:latest
+          
+          # Executar novo container
+          echo 'Iniciando novo container...'
+          docker run -d \
+            --name $CONTAINER_NAME \
+            --restart unless-stopped \
+            -p 80:80 \
+            $IMAGE_NAME:latest
+            
+          # Verificar se container está rodando
+          echo 'Verificando status do container...'
+          docker ps | grep $CONTAINER_NAME
+          
+          echo '✅ Deploy realizado com sucesso!'
+        "
+        
+    - name: Deploy Summary
+      run: |
+        IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/tdc-php-app"
+        echo "🎉 Deploy concluído com sucesso!"
+        echo "📦 Imagem: $IMAGE_NAME:${{ needs.build-and-push.outputs.image-tag }}"
+        echo "🌐 Aplicação disponível em: http://${{ secrets.VPS_HOST }}"
+        echo "📋 Container: ${{ env.CONTAINER_NAME }}" 

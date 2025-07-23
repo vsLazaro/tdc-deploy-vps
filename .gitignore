@@ -1,0 +1,26 @@
+# Docker
+*.tar.gz
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Temporary files
+tmp/
+temp/
+
+# Cache
+.cache/ 
