@@ -1,0 +1,66 @@
+===============================================
+COMANDOS TERRAFORM - GERENCIAR INFRAESTRUTURA AWS
+===============================================
+
+
+==================
+COMANDOS BÁSICOS
+==================
+
+# Inicializar Terraform (primeira vez ou após mudanças)
+terraform init
+
+# Validar configuração
+terraform validate
+
+# Ver plano de execução (o que será criado/modificado)
+terraform plan
+
+# Aplicar mudanças (criar infraestrutura)
+terraform apply
+
+
+
+==================
+CONSULTAR RECURSOS
+==================
+
+# Ver estado atual dos recursos
+terraform show
+
+# Listar recursos gerenciados
+terraform state list
+
+# Ver outputs (IP público, ID da instância, etc)
+terraform output
+
+==================
+SEQUÊNCIA COMPLETA
+==================
+
+# 1. Inicializar
+terraform init
+
+# 2. Validar
+terraform validate
+
+# 3. Ver plano
+terraform plan
+
+# 4. Aplicar
+terraform apply
+
+# 5. Ver informações
+terraform output
+
+# 6. Destruir 
+terraform destroy
+
+
+==================
+COMANDOS AWS CLI
+==================
+
+# Conectar via SSH
+ssh -i ~/.ssh/tdc-deploy-key.pem ubuntu@54.234.117.70
+
