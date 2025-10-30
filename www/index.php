@@ -44,7 +44,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Aplicação PHP Funcionando!</h1>
+            <h1>🚀 Aplicação PHP Funcionando 2.0!</h1>
             <p>Deploy automatizado via GitHub Actions</p>
         </div>
 
